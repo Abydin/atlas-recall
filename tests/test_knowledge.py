@@ -17,17 +17,17 @@ def test_index_pass_discovers_all_notes(notes_dir, tmp_path):
 def test_find_matches_body_text(notes_dir, tmp_path):
     conn = _fresh_conn(tmp_path)
     knowledge.run_index_pass(conn, Path(notes_dir), full=True)
-    hits = knowledge.find(conn, "em dash")
-    assert any(h["id"] == "feedback-no-em-dashes" for h in hits)
+    hits = knowledge.find(conn, "descale")
+    assert any(h["id"] == "rule-descale-weekly" for h in hits)
 
 
 def test_node_reports_wikilink_edge(notes_dir, tmp_path):
     conn = _fresh_conn(tmp_path)
     knowledge.run_index_pass(conn, Path(notes_dir), full=True)
-    n = knowledge.node(conn, "reference-portfolio-site")
+    n = knowledge.node(conn, "reference-bike-maintenance-log")
     assert n is not None
     dsts = {e["dst"] for e in n["edges"]}
-    assert "project-registry" in dsts
+    assert "gear-inventory" in dsts
     assert all(not e["divergent"] for e in n["edges"])
 
 
@@ -46,15 +46,15 @@ def test_verify_flags_broken_wikilink(notes_dir, tmp_path):
 def test_trace_follows_links_two_hops(notes_dir, tmp_path):
     conn = _fresh_conn(tmp_path)
     knowledge.run_index_pass(conn, Path(notes_dir), full=True)
-    rows = knowledge.trace(conn, "feedback-verify-before-claiming", depth=2)
+    rows = knowledge.trace(conn, "rule-check-tire-pressure", depth=2)
     dsts = {r["dst"] for r in rows}
-    assert "feedback-no-em-dashes" in dsts
+    assert "rule-descale-weekly" in dsts
 
 
 def test_map_topic_returns_hits_with_neighbors(notes_dir, tmp_path):
     conn = _fresh_conn(tmp_path)
     knowledge.run_index_pass(conn, Path(notes_dir), full=True)
-    result = knowledge.map_topic(conn, "portfolio")
+    result = knowledge.map_topic(conn, "maintenance log")
     assert result["hits"]
-    assert result["hits"][0]["id"] == "reference-portfolio-site"
+    assert result["hits"][0]["id"] == "reference-bike-maintenance-log"
     assert result["hits"][0]["neighbors"]

@@ -7,16 +7,16 @@ from atlas_recall.retrieval import top_pointers, format_pointer_block, score_doc
 def test_load_corpus_reads_all_notes(notes_dir):
     docs = load_corpus(notes_dir)
     names = {d["name"] for d in docs}
-    assert "feedback-no-em-dashes" in names
+    assert "rule-descale-weekly" in names
     assert "MEMORY" not in names  # excluded even if present
 
 
 def test_query_with_no_dense_and_no_external_services(cfg):
     """The whole product decision: this must work with chromadb absent and
     no Ollama running, and it must not raise."""
-    pointers = top_pointers("em dash outward text", cfg)
+    pointers = top_pointers("descale weekly buildup", cfg)
     assert pointers, "expected at least one hit on a clear keyword match"
-    assert pointers[0]["name"] == "feedback-no-em-dashes"
+    assert pointers[0]["name"] == "rule-descale-weekly"
 
 
 def test_off_topic_query_returns_nothing(cfg):
@@ -39,8 +39,8 @@ def test_wikilink_expansion_pulls_in_high_priority_neighbor(cfg):
     tuning to happen to produce a particular order."""
     docs = load_corpus(cfg.notes_dir)
     by_name = {d["name"]: d for d in docs}
-    top_doc = by_name["feedback-verify-before-claiming"]  # links to no-em-dashes
-    neighbor = by_name["feedback-no-em-dashes"]            # hard-rule priority
+    top_doc = by_name["rule-check-tire-pressure"]  # links to rule-descale-weekly
+    neighbor = by_name["rule-descale-weekly"]            # hard-rule priority
     cfg.top_k = 1  # forces the neighbor OUT of `top`, into expansion-only territory
 
     with patch(
@@ -50,7 +50,7 @@ def test_wikilink_expansion_pulls_in_high_priority_neighbor(cfg):
         pointers = top_pointers("anything", cfg, docs=docs)
 
     names = {p["name"] for p in pointers}
-    assert names == {"feedback-verify-before-claiming", "feedback-no-em-dashes"}
+    assert names == {"rule-check-tire-pressure", "rule-descale-weekly"}
 
 
 def test_format_pointer_block_empty():
@@ -62,7 +62,7 @@ def test_score_docs_never_raises_when_dense_enabled_but_unreachable(cfg):
     to BM25-only, not crash."""
     cfg.dense_enabled = True
     docs = load_corpus(cfg.notes_dir)
-    scored = score_docs("em dash", docs, cfg)
+    scored = score_docs("descale", docs, cfg)
     assert scored  # BM25 alone still finds it
 
 

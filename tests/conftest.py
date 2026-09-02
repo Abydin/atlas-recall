@@ -6,43 +6,44 @@ import pytest
 from atlas_recall.config import Config
 
 SAMPLE_NOTES = {
-    "feedback-no-em-dashes.md": """---
-name: feedback-no-em-dashes
-description: never use em dashes in outward-facing text
+    "rule-descale-weekly.md": """---
+name: rule-descale-weekly
+description: descale the espresso machine weekly regardless of visible buildup
 priority: hard-rule
 ---
 
-Use a middot or a comma instead of an em dash in anything an outside party
-can see: resumes, PR descriptions, commit messages, public docs.
+Run a full descale cycle weekly, regardless of visible buildup. Skipping
+it lets scale coat the pump and heating element, which is expensive to
+replace.
 """,
-    "reference-portfolio-site.md": """---
-name: reference-portfolio-site
-description: where the portfolio site lives and how it deploys
+    "reference-bike-maintenance-log.md": """---
+name: reference-bike-maintenance-log
+description: where the bike maintenance log lives and how it's updated
 priority: normal
 ---
 
-The portfolio site deploys from main automatically. See
-[[project-registry]] for the full list of active projects.
+The maintenance log gets an entry after every ride over 20 miles. See
+[[gear-inventory]] for the full list of active gear.
 """,
-    "project-registry.md": """---
-name: project-registry
-description: master project map
+    "gear-inventory.md": """---
+name: gear-inventory
+description: master list of gear and where it's stored
 priority: normal
 ---
 
-Registry of active projects and where their code lives.
+Inventory of active gear and where it lives.
 """,
-    "feedback-verify-before-claiming.md": """---
-name: feedback-verify-before-claiming
-description: run the test before asserting it passes
+    "rule-check-tire-pressure.md": """---
+name: rule-check-tire-pressure
+description: check tire pressure before every long ride
 priority: high
 ---
 
-Evidence before assertions. Run the command, read the output, then claim
-something works -- never the other way around. See
-[[feedback-no-em-dashes]] for another hard rule in the same spirit.
+Always check tire pressure before a long ride -- never trust the previous
+reading. See [[rule-descale-weekly]] for another hard rule in the same
+spirit.
 """,
-    "idea-mrr-portfolio.md": """Just a plain note with no frontmatter at all,
+    "loose-ride-notes.md": """Just a plain note with no frontmatter at all,
 to make sure the parser doesn't choke on one.
 """,
 }

@@ -17,7 +17,7 @@ def test_distill_empty_body_is_skipped(cfg, capsys):
 
 def test_distill_add_with_advisory_duplicate(cfg):
     ops = distill(
-        [{"description": "another note about em dashes in outward text", "body": "Body text."}],
+        [{"description": "another note about descaling the espresso machine weekly", "body": "Body text."}],
         cfg,
     )
     assert len(ops) == 1
@@ -36,21 +36,21 @@ def test_distill_update_requires_exact_target(cfg, capsys):
 
 def test_distill_never_crashes_with_dense_enabled_but_unreachable(cfg):
     cfg.dense_enabled = True
-    ops = distill([{"description": "em dash rule", "body": "body"}], cfg)
+    ops = distill([{"description": "descale rule", "body": "body"}], cfg)
     assert len(ops) == 1  # degraded to BM25, still worked
 
 
 def test_find_duplicates_bm25_fallback_when_dense_off(cfg):
-    hits = find_duplicates("em dash outward", cfg)
+    hits = find_duplicates("descale weekly buildup", cfg)
     assert hits
-    assert hits[0]["name"] == "feedback-no-em-dashes"
+    assert hits[0]["name"] == "rule-descale-weekly"
 
 
 def test_find_duplicates_reports_priority_not_type(cfg):
     """A note's priority (hard-rule|high|normal) and a candidate's type
     (feedback|project|user|reference) are disjoint vocabularies -- the
     BM25 dedup hit dict must label the value it actually carries."""
-    hits = find_duplicates("em dash outward", cfg)
+    hits = find_duplicates("descale weekly buildup", cfg)
     assert hits
     assert "priority" in hits[0]
     assert hits[0]["priority"] == "hard-rule"
@@ -105,14 +105,14 @@ def test_apply_update_ignores_forged_matched_memory_path(cfg, tmp_path):
     outside.write_text("untouched")
 
     ops = [{
-        "op": "UPDATE", "name": "feedback-no-em-dashes", "type": "feedback",
+        "op": "UPDATE", "name": "rule-descale-weekly", "type": "feedback",
         "description": "d", "body": "new body text",
-        "matched_memory": {"name": "feedback-no-em-dashes", "path": str(outside)},
+        "matched_memory": {"name": "rule-descale-weekly", "path": str(outside)},
         "distance": None,
     }]
     apply_ops(ops, cfg, auto_confirm=lambda op: True)
     assert outside.read_text() == "untouched"
-    real_note = tmp_path / "notes" / "feedback-no-em-dashes.md"
+    real_note = tmp_path / "notes" / "rule-descale-weekly.md"
     assert "new body text" in real_note.read_text()
 
 
@@ -133,13 +133,13 @@ def test_apply_update_carries_forward_existing_priority(cfg, tmp_path):
     """A hard-rule note must stay hard-rule after an approved UPDATE --
     apply.py must not hardcode priority: normal on rewrite."""
     ops = [{
-        "op": "UPDATE", "name": "feedback-no-em-dashes", "type": "feedback",
+        "op": "UPDATE", "name": "rule-descale-weekly", "type": "feedback",
         "description": "d", "body": "rewritten body",
-        "matched_memory": {"name": "feedback-no-em-dashes", "path": "/tmp/ignored.md"},
+        "matched_memory": {"name": "rule-descale-weekly", "path": "/tmp/ignored.md"},
         "distance": None,
     }]
     apply_ops(ops, cfg, auto_confirm=lambda op: True)
-    real_note = tmp_path / "notes" / "feedback-no-em-dashes.md"
+    real_note = tmp_path / "notes" / "rule-descale-weekly.md"
     text = real_note.read_text()
     assert "priority: hard-rule" in text
     assert "rewritten body" in text
@@ -152,14 +152,14 @@ def test_apply_describe_prints_resolved_destination(cfg, tmp_path, capsys):
             "description": "d", "body": "body text", "matched_memory": None, "distance": None,
         },
         {
-            "op": "UPDATE", "name": "feedback-no-em-dashes", "type": "feedback",
+            "op": "UPDATE", "name": "rule-descale-weekly", "type": "feedback",
             "description": "d", "body": "rewritten body",
-            "matched_memory": {"name": "feedback-no-em-dashes", "path": "/tmp/ignored.md"},
+            "matched_memory": {"name": "rule-descale-weekly", "path": "/tmp/ignored.md"},
             "distance": None,
         },
     ]
     apply_ops(ops, cfg, auto_confirm=lambda op: True)
     out = capsys.readouterr().out
     assert str(tmp_path / "notes" / "new-note.md") in out
-    assert str(tmp_path / "notes" / "feedback-no-em-dashes.md") in out
+    assert str(tmp_path / "notes" / "rule-descale-weekly.md") in out
     assert "/tmp/ignored.md" not in out
