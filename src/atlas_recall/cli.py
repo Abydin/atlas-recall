@@ -44,11 +44,42 @@ def cmd_init(args) -> int:
     path = save_config(cfg)
     print(f"Wrote config to {path}")
     print(f"notes_dir = {notes_dir}\n")
-    print("Paste this block into your Claude Code settings.json (merge the")
-    print("\"hooks\" key if one already exists there):\n")
+    print("Next: recall install --client <claude-code|claude-desktop|cursor|windsurf|cline|codex>")
+    print("      wires this into your AI client's config directly (merges, backs up, idempotent;")
+    print("      pass --dry-run to preview first).\n")
+    print("Then: recall index    (builds the search index)")
+    print("      recall query \"...\"   (see what would be injected)\n")
+    print("Prefer to do it by hand? Here's the raw Claude Code hook block")
+    print("(paste into settings.json, merging the \"hooks\" key if one exists):\n")
     print(HOOK_BLOCK)
-    print("\nThen: recall index    (builds the search index)")
-    print("      recall query \"...\"   (see what would be injected)")
+    return 0
+
+
+def cmd_install(args) -> int:
+    from .install import install
+
+    result = install(args.client, dry_run=args.dry_run)
+    print(json.dumps(result, indent=2))
+    if not result.get("success"):
+        return 1
+    if args.dry_run:
+        print("(dry run -- nothing written)", file=sys.stderr)
+    elif not result.get("changed"):
+        print(f"{args.client}: already installed, nothing to do", file=sys.stderr)
+    return 0
+
+
+def cmd_uninstall(args) -> int:
+    from .install import uninstall
+
+    result = uninstall(args.client, dry_run=args.dry_run)
+    print(json.dumps(result, indent=2))
+    if not result.get("success"):
+        return 1
+    if args.dry_run:
+        print("(dry run -- nothing written)", file=sys.stderr)
+    elif not result.get("changed"):
+        print(f"{args.client}: not installed, nothing to do", file=sys.stderr)
     return 0
 
 
@@ -268,13 +299,32 @@ def cmd_warm(args) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="recall", description="Deterministic markdown memory for Claude Code.")
+    p = argparse.ArgumentParser(
+        prog="recall",
+        description=(
+            "Deterministic markdown memory and knowledge graph for AI agents -- "
+            "BM25+wikilink retrieval over your notes, an MCP server, and a Claude "
+            "Code hook, all over one index."
+        ),
+    )
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = p.add_subparsers(dest="command", required=True)
 
-    sp = sub.add_parser("init", help="configure a notes directory and print the hook block")
+    sp = sub.add_parser("init", help="configure a notes directory")
     sp.add_argument("dir", nargs="?", default=".")
     sp.set_defaults(func=cmd_init)
+
+    from .install import CLIENTS
+
+    sp = sub.add_parser("install", help="wire recall into an AI client's config (merges, backs up)")
+    sp.add_argument("--client", required=True, choices=sorted(CLIENTS))
+    sp.add_argument("--dry-run", action="store_true", help="print what would change; write nothing")
+    sp.set_defaults(func=cmd_install)
+
+    sp = sub.add_parser("uninstall", help="remove recall's entry from an AI client's config")
+    sp.add_argument("--client", required=True, choices=sorted(CLIENTS))
+    sp.add_argument("--dry-run", action="store_true", help="print what would change; write nothing")
+    sp.set_defaults(func=cmd_uninstall)
 
     sp = sub.add_parser("index", help="(re)index the configured directory")
     sp.add_argument("--dense", action="store_true", help="also build the optional Chroma/Ollama dense index")
