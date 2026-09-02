@@ -15,11 +15,36 @@ plus a wikilink graph over your notes -- as of this writing (2026), mem0,
 Letta, and Zep don't ship that combination; check their current docs, this
 is the kind of claim that goes stale.
 
-Claude Code is the first integration this package ships: a
-`UserPromptSubmit` hook (`recall hook`) that injects retrieval results
-straight into the prompt, no copy-paste. More integrations are planned;
-until they land, any other agent gets the same retrieval and knowledge
-graph by shelling out to the `recall` CLI directly.
+Two ways to wire it into an agent, both driven by `recall install` (no
+copy-pasting JSON by hand): an **MCP server** (`atlas-recall-mcp`) that
+exposes retrieval and the knowledge graph as structured tools over local
+stdio, and a **Claude Code hook** (`recall hook`) that injects retrieval
+results straight into the prompt on every turn. Any other agent that can
+run a shell command gets the same engine by calling the `recall` CLI
+directly.
+
+## Supported clients
+
+| Client | How | Config written |
+|---|---|---|
+| Claude Code | `UserPromptSubmit` hook | `~/.claude/settings.json` |
+| Claude Desktop | MCP (stdio) | `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) |
+| Cursor | MCP (stdio) | `~/.cursor/mcp.json` |
+| Windsurf | MCP (stdio) | `~/.codeium/windsurf/mcp_config.json` |
+| Cline (VS Code) | MCP (stdio) | `.../globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` |
+| Codex CLI | MCP (stdio), via `codex mcp add` | `~/.codex/config.toml` |
+
+Every path above was verified against that client's own docs, not
+guessed -- `recall install --client <name>` writes to it directly (merges,
+backs up, idempotent, `--dry-run` to preview). Zed also takes a local
+stdio MCP server the same way the others do; it just isn't wired into
+`recall install` yet, so point it at `atlas-recall-mcp` by hand.
+
+**Not supported: ChatGPT.** ChatGPT's web and desktop connectors need a
+remote HTTP MCP endpoint, not a local stdio process -- exposing a user's
+private notes over a network endpoint is a deployment decision for
+whoever runs this, not something this package does on its own, so it
+isn't shipped here.
 
 ## The problem
 
@@ -80,11 +105,16 @@ pipx install atlas-recall
 rather than the released version, install from source with
 `pipx install git+https://github.com/Abydin/atlas-recall`.
 
-The dense path is a separate extra, not a hard dependency:
+The dense retrieval path and the MCP server are both separate extras, not
+hard dependencies:
 
 ```
-pip install "atlas-recall[dense]"
+pip install "atlas-recall[dense]"   # Chroma + Ollama semantic retrieval
+pip install "atlas-recall[mcp]"     # atlas-recall-mcp -- needs Python 3.10+
 ```
+
+The base package (everything except the MCP server) stays on a Python
+3.9 floor; the `mcp` SDK itself requires 3.10+.
 
 ## The three commands, with real output
 
@@ -93,13 +123,21 @@ $ recall init ~/notes
 Wrote config to ~/.config/atlas-recall/config.json
 notes_dir = ~/notes
 
-Paste this block into your Claude Code settings.json ...
+Next: recall install --client <claude-code|claude-desktop|cursor|windsurf|cline|codex>
+      wires this into your AI client's config directly (merges, backs up, idempotent;
+      pass --dry-run to preview first).
+
+Then: recall index    (builds the search index)
+      recall query "..."   (see what would be injected)
+
+$ recall install --client claude-code
 {
-  "hooks": {
-    "UserPromptSubmit": [
-      { "hooks": [ { "type": "command", "command": "recall hook" } ] }
-    ]
-  }
+  "success": true,
+  "path": "/Users/you/.claude/settings.json",
+  "changed": true,
+  "dry_run": false,
+  "backup": null,
+  "client": "claude-code"
 }
 
 $ recall index
@@ -113,11 +151,13 @@ coffee-brewing -- ~/notes/coffee-brewing.md -- pour-over ratio and grind size no
 ```
 
 That ran with no Chroma collection built and no Ollama process running -
-`recall init` never mentions either. `recall hook` (the piece that actually
-wires into Claude Code) reads a `UserPromptSubmit` payload on stdin and
-emits the same block as `hookSpecificOutput.additionalContext`; paste the
-block `recall init` printed into your `settings.json` and every prompt gets
-the relevant notes injected automatically.
+`recall init` never mentions either. `recall hook` (the piece that
+actually wires into Claude Code) reads a `UserPromptSubmit` payload on
+stdin and emits the same block as `hookSpecificOutput.additionalContext`;
+`recall install --client claude-code` writes that wiring for you. Prefer
+to do it by hand? `recall init` still prints the raw hook block as a
+fallback -- paste it into `settings.json` yourself, merging the `"hooks"`
+key if one already exists there.
 
 ## The human path: search and trace the same corpus
 
@@ -161,6 +201,29 @@ gap: the automatic path works the moment `notes_dir` is configured, no
 indexing required. One directory, one config file - `index` and `query`
 are still two interfaces on the same engine, not two tools that happen to
 sit in the same repo.
+
+## The MCP server
+
+`atlas-recall-mcp` (needs `pip install "atlas-recall[mcp]"` and Python
+3.10+) exposes the same engine as MCP tools over stdio, so a client calls
+them directly instead of shelling out to `recall`. Every tool returns
+structured JSON -- fields, not formatted prose -- so the calling model can
+act on `pointers[i].score` or `edges[i].divergent` rather than re-parsing
+English.
+
+| Tool | What it does |
+|---|---|
+| `recall_query` | Hybrid retrieval for a text -- the same ranking the Claude Code hook injects automatically. |
+| `recall_search` | Full-text (FTS5/BM25) search, optionally filtered by `doc_type`. |
+| `recall_list_notes` | List indexed notes, newest-modified first, optionally filtered by type. |
+| `recall_node` | One note by id: full body plus its 1-hop edges. |
+| `recall_trace` | Follow the wikilink/frontmatter edge graph outward from a note. |
+| `recall_map` | The shape of a topic: search hits plus each hit's neighbors. |
+| `recall_verify` | Report edges whose target note no longer exists. |
+
+`recall install --client <claude-desktop|cursor|windsurf|cline|codex>`
+wires this in directly; see "Supported clients" above for exactly which
+config file it writes.
 
 ## Propose-only curation
 
@@ -213,6 +276,8 @@ machine, corpus, or rules. Two fields worth knowing about:
 | `retrieval.py` | RRF fusion, recency decay, priority tiebreak, admission floor. |
 | `knowledge.py` | SQLite FTS5 + wikilink graph: `find`/`node`/`trace`/`map`/`verify`. |
 | `hook.py` | The Claude Code `UserPromptSubmit` integration. |
+| `server.py` / `_mcp_entry.py` | The MCP server (`atlas-recall-mcp`) and its optional-extra import guard. |
+| `install.py` | `recall install`/`uninstall`: merge, backup, atomic write into a client's config. |
 | `distill.py` / `apply.py` | Propose-only curation and its human-gated apply step. |
 | `warmer.py` | Optional macOS fix for cloud-synced notes going "dataless". |
 | `cli.py` | The `recall` console script. |
