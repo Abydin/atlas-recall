@@ -43,7 +43,13 @@ def _dest_in_notes_dir(cfg: Config, stem: str) -> str:
     if clean_slug(stem) != stem:
         raise ValueError(f"unsafe note name: {stem!r}")
     path = os.path.join(os.path.expanduser(cfg.notes_dir), f"{stem}.md")
-    return _resolve_within_notes_dir(cfg, path)
+    path = _resolve_within_notes_dir(cfg, path)
+    # ADD must never be an implicit overwrite. In particular, ops supplied to
+    # `distill-apply` may be hand-authored and therefore have bypassed the
+    # advisory duplicate detection in distill.py.
+    if os.path.lexists(path):
+        raise ValueError(f"refusing to overwrite existing note: {path}")
+    return path
 
 
 def _resolve_update_target(cfg: Config, op: Dict) -> Tuple[Dict, str]:
@@ -65,7 +71,9 @@ def _write_add(dest: str, op: Dict) -> str:
         f"---\nname: {op['name']}\ndescription: {op['description']}\n"
         f"priority: normal\n---\n\n{op['body']}\n"
     )
-    with open(dest, "w", encoding="utf-8") as fh:
+    # Exclusive creation closes the check-then-write race with the preflight
+    # check in _dest_in_notes_dir.
+    with open(dest, "x", encoding="utf-8") as fh:
         fh.write(content)
     return dest
 

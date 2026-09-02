@@ -68,7 +68,7 @@ def index_dense(cfg: Config) -> int:
     ids = [d["key"] for d in docs]
     texts = [f"{d['name']}\n{d['description']}\n\n{d['body']}" for d in docs]
     metas = [
-        {"name": d["name"], "description": d["description"], "path": d["path"]}
+        {"key": d["key"], "name": d["name"], "description": d["description"], "path": d["path"]}
         for d in docs
     ]
     col.upsert(ids=ids, documents=texts, metadatas=metas)
@@ -76,7 +76,7 @@ def index_dense(cfg: Config) -> int:
 
 
 def query_dense(query: str, cfg: Config, topn: int = 15) -> List[Dict]:
-    """Return ranked hits from the dense collection: [{name, path, distance}].
+    """Return ranked hits from the dense collection: [{key, name, path, distance}].
     Raises on any failure (chromadb absent, Ollama down, empty/missing
     collection) -- callers (retrieval.py) catch this and fuse with BM25
     only, which is the documented degrade path."""
@@ -85,6 +85,6 @@ def query_dense(query: str, cfg: Config, topn: int = 15) -> List[Dict]:
         raise RuntimeError(f"empty dense index (collection={cfg.collection!r}) -- run `recall index --dense` first")
     res = col.query(query_texts=[query], n_results=topn)
     return [
-        {"name": m["name"], "path": m.get("path", ""), "distance": dist}
+        {"key": m["key"], "name": m["name"], "path": m.get("path", ""), "distance": dist}
         for m, dist in zip(res["metadatas"][0], res["distances"][0])
     ]

@@ -79,6 +79,20 @@ def test_apply_writes_only_on_explicit_yes(cfg, tmp_path):
     assert "body text" in written.read_text()
 
 
+def test_apply_add_refuses_to_overwrite_existing_note(cfg, tmp_path):
+    existing = tmp_path / "notes" / "existing.md"
+    existing.write_text("original content", encoding="utf-8")
+    ops = [{
+        "op": "ADD", "name": "existing", "type": "reference",
+        "description": "d", "body": "replacement", "matched_memory": None, "distance": None,
+    }]
+    import pytest
+
+    with pytest.raises(ValueError, match="overwrite"):
+        apply_ops(ops, cfg, auto_confirm=lambda op: True)
+    assert existing.read_text(encoding="utf-8") == "original content"
+
+
 def test_apply_add_refuses_path_escaping_notes_dir(cfg, tmp_path):
     """CWE-22: an ADD op with a dirty/traversal name must never write
     outside notes_dir, and must raise rather than silently sanitize and

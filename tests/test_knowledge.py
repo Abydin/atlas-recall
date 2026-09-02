@@ -1,4 +1,8 @@
 from pathlib import Path
+import os
+import time
+
+import pytest
 
 from atlas_recall import knowledge
 
@@ -58,3 +62,47 @@ def test_map_topic_returns_hits_with_neighbors(notes_dir, tmp_path):
     assert result["hits"]
     assert result["hits"][0]["id"] == "reference-bike-maintenance-log"
     assert result["hits"][0]["neighbors"]
+
+
+def test_incremental_index_detects_edits_within_one_second(tmp_path):
+    notes = tmp_path / "notes"
+    notes.mkdir()
+    note = notes / "note.md"
+    note.write_text("---\nname: note\n---\n\nfirst", encoding="utf-8")
+    conn = _fresh_conn(tmp_path)
+    knowledge.run_index_pass(conn, notes, full=False)
+
+    note.write_text("---\nname: note\n---\n\nsecond", encoding="utf-8")
+    stats = knowledge.run_index_pass(conn, notes, full=False)
+
+    assert stats["changed"] == 1
+    assert conn.execute("SELECT body FROM docs WHERE id = 'note'").fetchone()[0] == "\nsecond"
+
+
+def test_incremental_index_removes_old_id_when_frontmatter_name_changes(tmp_path):
+    notes = tmp_path / "notes"
+    notes.mkdir()
+    note = notes / "note.md"
+    note.write_text("---\nname: old-id\n---\n\nfirst", encoding="utf-8")
+    conn = _fresh_conn(tmp_path)
+    knowledge.run_index_pass(conn, notes, full=False)
+
+    note.write_text("---\nname: new-id\n---\n\nsecond", encoding="utf-8")
+    # Make this test independent of filesystem timestamp granularity while
+    # the prior test exercises the no-sleep same-second path.
+    now = time.time() + 2
+    os.utime(note, (now, now))
+    knowledge.run_index_pass(conn, notes, full=False)
+
+    assert conn.execute("SELECT id FROM docs ORDER BY id").fetchall() == [("new-id",)]
+
+
+def test_index_rejects_duplicate_frontmatter_ids(tmp_path):
+    notes = tmp_path / "notes"
+    notes.mkdir()
+    (notes / "one.md").write_text("---\nname: same\n---\n\none", encoding="utf-8")
+    (notes / "two.md").write_text("---\nname: same\n---\n\ntwo", encoding="utf-8")
+    conn = _fresh_conn(tmp_path)
+
+    with pytest.raises(ValueError, match="duplicate note id"):
+        knowledge.run_index_pass(conn, notes, full=True)

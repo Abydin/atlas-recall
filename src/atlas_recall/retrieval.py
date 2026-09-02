@@ -87,7 +87,7 @@ def _dense_hits(query: str, cfg: Config, topn: int) -> List[str]:
         hits = dense_mod.query_dense(query, cfg, topn=topn)
     except Exception:
         return []
-    return [h["name"] for h in hits if h["distance"] <= cfg.dense_dist_max]
+    return [h["key"] for h in hits if h["distance"] <= cfg.dense_dist_max]
 
 
 def score_docs(
