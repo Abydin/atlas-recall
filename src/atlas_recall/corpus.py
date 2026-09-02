@@ -1,10 +1,10 @@
 """
 Corpus loading: scan a directory of markdown notes into doc dicts.
 
-Adapted from the private hybrid_recall.py's load_corpus(), decoupled from
-a hardcoded multi-project MEMORY_DIRS map down to a single configured
-`notes_dir` -- "read a directory you point it at" is the whole point of
-this package. Also keeps the dataless-file guard: on macOS, a directory
+Reads a single configured `notes_dir` -- "read a directory you point it
+at" is the whole point of this package, no multi-project directory map,
+no per-machine hardcoding. Also keeps the dataless-file guard: on macOS, a
+directory
 synced through iCloud Drive can evict a file's local copy to a network-
 only placeholder, and reading one blocks for tens of seconds. That guard
 is cheap (an lstat, not a read) and harmless on any other OS.

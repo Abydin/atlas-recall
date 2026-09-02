@@ -3,11 +3,11 @@ Hybrid retrieval core: BM25 lexical search, fused with optional dense
 (semantic) search via Reciprocal Rank Fusion (RRF), scored by recency
 decay and a priority tiebreak, gated by a conservative admission floor.
 
-This is the differentiator this whole package exists to ship. Adapted from
-a private hybrid_recall.py (RRF fusion over a Chroma/bge-m3 corpus) built
-across several rounds of measurement against a labeled should-hit eval set.
-The headline number, reproduced here because it's the reason RRF (rank-
-based fusion) replaced a plain distance cutoff: at a 0.45 cosine cutoff, a
+This is the differentiator this whole package exists to ship: RRF fusion
+over a BM25/dense corpus, built across several rounds of measurement
+against a labeled should-hit eval set. The headline number, reproduced
+here because it's the reason RRF (rank-based fusion) replaced a plain
+distance cutoff: at a 0.45 cosine cutoff, a
 nomic-embed-text dense-only path admitted an average of 16.1 of 108 corpus
 docs per query at 100% hit-recall -- a flat junk floor, the cutoff wasn't
 discriminating anything. Swapping to bge-m3 at an empirically swept 0.48

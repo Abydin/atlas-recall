@@ -1,12 +1,12 @@
 """
 Keep-downloaded warmer for a notes directory synced through a cloud drive
-(iCloud Drive, in the environment this was built on).
+(iCloud Drive being the common case).
 
 Root cause this protects against: on macOS, a cloud-synced directory can
 evict a file's local copy to a network-only ("dataless") placeholder to
 save disk space. Reading one blocks the calling thread until it's
-re-downloaded -- measured up to ~70s on one such file in the environment
-this was built for. `corpus.py`'s `is_dataless()` check lets retrieval SKIP
+re-downloaded -- measured up to ~70s on one such file. `corpus.py`'s
+`is_dataless()` check lets retrieval SKIP
 a dataless file instead of hanging on it, but a skipped file means a
 smaller corpus gets searched. This warmer is the environmental fix: force-
 materialize the configured notes_dir on a schedule (e.g. cron/launchd) so

@@ -6,9 +6,14 @@
 git clone https://github.com/Abydin/atlas-recall
 cd atlas-recall
 python3 -m venv .venv && source .venv/bin/activate
+pip install --upgrade pip
 pip install -e ".[dense,dev]"
 pytest
 ```
+
+The `pip install --upgrade pip` step matters on the `>=3.9` floor this
+package claims to support: the pip bundled with a stock 3.9 venv (e.g.
+21.2.4) predates PEP 660 and rejects `pip install -e .` outright.
 
 `pip install -e ".[dense,dev]"` pulls in `chromadb` too, so the dense-path
 tests actually run. If you only care about the default (BM25) path, `pip
@@ -26,10 +31,14 @@ install -e ".[dev]"` is enough and the dense tests will skip themselves.
   If you're adding a new curation feature, it proposes an op; `apply.py` is
   the only place that writes, and only after an explicit yes for that one
   op.
-- **Run the eval before touching `retrieval.py`'s tunables.** `RRF_K`,
+- **Re-measure before touching `retrieval.py`'s tunables.** `RRF_K`,
   `MIN_SCORE`, `PRIORITY_WEIGHT`, `RECENCY_FLOOR` were set by measuring
-  precision/recall against a labeled corpus, not by feel. Changing one
-  without re-measuring is how a "small" tweak quietly makes retrieval worse.
+  precision/recall against a labeled should-hit corpus (see the README's
+  "measured result" section for the methodology), not by feel. No eval
+  harness ships in this repo yet -- build a small labeled query set over
+  your own notes (query, expected note names) and compare `recall query`
+  output before/after your change. Changing a tunable without re-measuring
+  is how a "small" tweak quietly makes retrieval worse.
 
 ## Tests
 

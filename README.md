@@ -9,7 +9,9 @@ tools bolted together. The same corpus, the same config, the same index:
 `recall query` answers "what's relevant" automatically for an agent (a
 Claude Code `UserPromptSubmit` hook), and `recall find` / `recall map` /
 `recall trace` answer the same question interactively for a human, plus a
-wikilink graph over your notes that neither mem0, Letta, nor Zep ship.
+wikilink graph over your notes -- as of this writing (2026), mem0, Letta,
+and Zep don't ship that combination; check their current docs, this is the
+kind of claim that goes stale.
 
 ## The problem
 
@@ -62,15 +64,19 @@ the repo dies unused.
 
 ## Install
 
-```
-pipx install atlas-recall
-```
-
-(or `pip install atlas-recall` inside a venv). The dense path is a separate
-extra, not a hard dependency:
+Not registered on PyPI yet -- install straight from source:
 
 ```
-pip install "atlas-recall[dense]"
+pipx install git+https://github.com/Abydin/atlas-recall
+```
+
+(or `pip install git+https://github.com/Abydin/atlas-recall` inside a
+venv). A plain PyPI install (`pipx install atlas-recall`) is coming once
+the name is registered there; until then that command won't find this
+package. The dense path is a separate extra, not a hard dependency:
+
+```
+pip install "atlas-recall[dense] @ git+https://github.com/Abydin/atlas-recall"
 ```
 
 ## The three commands, with real output
@@ -130,7 +136,7 @@ pour-over ratio and grind size notes
   -link-> water-temperature
 
 $ recall verify
-verify: checked=3 divergent=0
+verify: checked=1 divergent=0
 ```
 
 `find` is full-text search (SQLite FTS5, porter-stemmed). `node` shows one
@@ -139,16 +145,23 @@ recursively. `map` shows the shape of a topic: search hits plus what they
 connect to. `verify` reports links that point at a note that no longer
 exists, so drift is visible instead of silent.
 
-`recall index` builds both indexes from the same directory in one pass: the
-in-memory BM25 corpus (and the Chroma collection, with `--dense`) that
-`query`/`hook` read, and the SQLite FTS5 + wikilink graph that `find` /
-`node` / `trace` / `map` / `verify` read. One directory, one config file,
-one `index` command - not two tools that happen to sit in the same repo.
+`recall index` builds the SQLite FTS5 + wikilink graph that `find` /
+`node` / `trace` / `map` / `verify` read (and the Chroma collection, with
+`--dense`). It does NOT need to run before `recall query` / `recall hook`
+work: the BM25 corpus those read is built fresh, in-process, per query --
+there's no separate BM25 index step, and that's a real strength, not a
+gap: the automatic path works the moment `notes_dir` is configured, no
+indexing required. One directory, one config file - `index` and `query`
+are still two interfaces on the same engine, not two tools that happen to
+sit in the same repo.
 
 ## Propose-only curation
 
-Nobody else ships memory curation where an agent proposes edits and a human
-approves every single one, with nothing auto-written. `recall distill`
+As of this writing (2026), I'm not aware of another tool that ships memory
+curation where an agent proposes edits and a human approves every single
+one, with nothing auto-written -- that's a claim about what I've seen, not
+an exhaustive survey, so verify against current alternatives before
+repeating it. `recall distill`
 reads candidate notes (name, description, body, optionally which existing
 note to update) as JSON on stdin and returns a list of proposed ADD/UPDATE
 operations - an advisory near-duplicate warning on ADDs, an explicit,

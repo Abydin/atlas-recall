@@ -7,24 +7,17 @@ trace`, `recall map`, `recall verify`) the exact corpus the automatic
 retrieval and search are two interfaces on the same engine, not two
 products bolted together.
 
-Adapted from a private multi-project tool that also indexed a codegraph DB,
-a project registry, and materialized per-project "cards". None of that
-ports here: this package has no concept of "project" (it indexes ONE
-directory you point it at) and no codegraph integration (that was
-tightly coupled to one specific internal toolchain, out of scope for a
-portable notes graph). What carries over is the actually generic part --
-frontmatter parsing, wikilink edge derivation, FTS5 search, recursive
-trace, and divergence tracking for stale links.
+This package has no concept of "project" -- it indexes ONE directory you
+point it at, nothing more. What it does: frontmatter parsing, wikilink
+edge derivation, FTS5 search, recursive trace, and divergence tracking for
+stale links.
 
-Known carried-over bug (not introduced here, not fixed here -- see this
-package's README/CHANGELOG): `index` (incremental) only re-derives edges
-for docs it re-parses this pass. An edge whose TARGET doc was deleted or
-renamed, but whose SOURCE doc was untouched this pass, is never re-derived,
-so it never gets a chance to self-heal -- it sits flagged `divergence=1`
-forever, and the only thing that clears it is a full `rebuild`. A fix for
-the equivalent bug in the private tool this was adapted from was in
-progress elsewhere at the time this package was built; port the fix here
-once it lands upstream, don't re-derive it from scratch.
+Known limitation (see this package's README, "Known limitation" section):
+`index` (incremental) only re-derives edges for docs it re-parses this
+pass. An edge whose TARGET doc was deleted or renamed, but whose SOURCE
+doc was untouched this pass, is never re-derived, so it never gets a
+chance to self-heal -- it sits flagged `divergence=1` forever, and the
+only thing that clears it is a full `rebuild`.
 """
 from __future__ import annotations
 
