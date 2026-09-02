@@ -64,19 +64,18 @@ the repo dies unused.
 
 ## Install
 
-Not registered on PyPI yet -- install straight from source:
-
 ```
-pipx install git+https://github.com/Abydin/atlas-recall
+pipx install atlas-recall
 ```
 
-(or `pip install git+https://github.com/Abydin/atlas-recall` inside a
-venv). A plain PyPI install (`pipx install atlas-recall`) is coming once
-the name is registered there; until then that command won't find this
-package. The dense path is a separate extra, not a hard dependency:
+(or `pip install atlas-recall` inside a venv). To track the latest commit
+rather than the released version, install from source with
+`pipx install git+https://github.com/Abydin/atlas-recall`.
+
+The dense path is a separate extra, not a hard dependency:
 
 ```
-pip install "atlas-recall[dense] @ git+https://github.com/Abydin/atlas-recall"
+pip install "atlas-recall[dense]"
 ```
 
 ## The three commands, with real output
