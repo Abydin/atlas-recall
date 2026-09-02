@@ -1,0 +1,8 @@
+{
+  "_comment": "Example only. Copy the keyword_rules array below into your own ~/.config/atlas-recall/config.json under the 'keyword_rules' key -- don't inherit these literal rules, they're not yours. Each entry is [keywords, rule_line]; if the prompt contains any keyword, rule_line gets echoed into the hook's context.",
+  "keyword_rules": [
+    [["push", "pr create", "pull request"], "RULE: never `git push` / open a PR without an explicit go-ahead this session."],
+    [["send", "email", "message", "slack"], "RULE: proofread outward-facing text before sending; no placeholder text left in."],
+    [["commit"], "RULE: stage specific paths only, never a blanket add-everything."]
+  ]
+}

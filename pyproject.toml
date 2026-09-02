@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "atlas-recall"
+version = "0.1.0"
+description = "Deterministic markdown memory for Claude Code: index a directory of notes, retrieve the relevant ones, inject them into a prompt via a hook, and search/trace the same corpus as a wikilink graph. No vector database required."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+keywords = ["claude-code", "memory", "retrieval", "bm25", "hook", "rag"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Libraries",
+]
+dependencies = [
+    "rank-bm25>=0.2.2",
+]
+
+[project.optional-dependencies]
+dense = [
+    "chromadb>=0.5.0",
+    "ollama>=0.3.0",
+]
+dev = [
+    "pytest>=7.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Abydin/atlas-recall"
+Issues = "https://github.com/Abydin/atlas-recall/issues"
+
+[project.scripts]
+recall = "atlas_recall.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

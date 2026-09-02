@@ -1,0 +1,20 @@
+__pycache__/
+*.pyc
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+
+# Local config + indexes -- never ship anyone's actual notes or DB.
+.recall/
+recall.db
+recall.db-wal
+recall.db-shm
+recall.db.lock
+chroma/
+*.chroma/
+
+.DS_Store
