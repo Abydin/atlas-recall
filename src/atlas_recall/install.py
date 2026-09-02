@@ -140,7 +140,21 @@ def codex_config_path() -> Path:
 # --------------------------------------------------------------------------
 # mcpServers-shaped clients (Claude Desktop, Cursor, Windsurf, Cline)
 # --------------------------------------------------------------------------
-def _install_mcp_json(path: Path, dry_run: bool) -> Dict[str, Any]:
+def _install_mcp_json(path: Path, dry_run: bool, require_existing_parent: bool = False) -> Dict[str, Any]:
+    if require_existing_parent and not path.parent.exists():
+        # Cline's exact path varies by VS Code variant (standard/Insiders/
+        # VSCodium); a missing parent here is a signal we've got the wrong
+        # one, not proof Cline isn't installed. Refuse rather than create
+        # a directory tree and a config file Cline will never read.
+        return {
+            "success": False, "path": str(path),
+            "error": (
+                f"{path.parent} does not exist -- Cline (or this VS Code "
+                f"variant) doesn't appear to be installed here. VS Code "
+                f"Insiders and VSCodium use a different globalStorage path; "
+                f"if you use one of those, wire the MCP server in by hand."
+            ),
+        }
     try:
         data = _load_json_or_raise(path)
     except ValueError as e:
@@ -344,7 +358,10 @@ CLIENTS: Dict[str, Dict[str, Any]] = {
     "claude-desktop": {"kind": "mcp", "path_fn": claude_desktop_config_path},
     "cursor": {"kind": "mcp", "path_fn": cursor_config_path},
     "windsurf": {"kind": "mcp", "path_fn": windsurf_config_path},
-    "cline": {"kind": "mcp", "path_fn": cline_config_path},
+    # Cline's globalStorage parent is created by VS Code itself, so its
+    # absence is a real "this isn't installed here" signal -- see
+    # _install_mcp_json's require_existing_parent branch.
+    "cline": {"kind": "mcp", "path_fn": cline_config_path, "require_existing_parent": True},
     "codex": {"kind": "codex"},
 }
 
@@ -367,7 +384,10 @@ def _dispatch(
             path = config_path or spec["path_fn"]()
         except ValueError as e:
             return {"success": False, "client": client, "error": str(e)}
-        result = (hook_fn if spec["kind"] == "hook" else mcp_fn)(path, dry_run)
+        if spec["kind"] == "hook":
+            result = hook_fn(path, dry_run)
+        else:
+            result = mcp_fn(path, dry_run, require_existing_parent=spec.get("require_existing_parent", False))
     result["client"] = client
     return result
 
@@ -381,5 +401,10 @@ def install(client: str, dry_run: bool = False, config_path: Optional[Path] = No
 
 
 def uninstall(client: str, dry_run: bool = False, config_path: Optional[Path] = None) -> Dict[str, Any]:
-    """Remove `client`'s config entry. See `install` for `config_path`."""
-    return _dispatch(client, dry_run, config_path, _uninstall_claude_code_hook, _uninstall_mcp_json, _uninstall_codex)
+    """Remove `client`'s config entry. See `install` for `config_path`.
+    Never applies the `require_existing_parent` guard -- removing a
+    never-installed entry is already a safe no-op, nothing to refuse."""
+    def _mcp_uninstall(path, dry_run, **_ignored):
+        return _uninstall_mcp_json(path, dry_run)
+
+    return _dispatch(client, dry_run, config_path, _uninstall_claude_code_hook, _mcp_uninstall, _uninstall_codex)

@@ -147,6 +147,40 @@ def test_uninstall_dry_run_writes_nothing(tmp_path):
 
 
 # --------------------------------------------------------------------------
+# Cline: refuse rather than create a config file the wrong VS Code variant
+# will never read.
+# --------------------------------------------------------------------------
+def test_cline_install_refuses_when_parent_dir_missing(tmp_path):
+    cfg_path = tmp_path / "does-not-exist-yet" / "cline_mcp_settings.json"
+
+    result = install.install("cline", config_path=cfg_path)
+
+    assert result["success"] is False
+    assert str(cfg_path.parent) in result["error"]
+    assert not cfg_path.exists()
+
+
+def test_cline_install_succeeds_when_parent_dir_exists(tmp_path):
+    cfg_path = tmp_path / "cline_mcp_settings.json"
+    cfg_path.parent.mkdir(parents=True, exist_ok=True)  # tmp_path already exists
+
+    result = install.install("cline", config_path=cfg_path)
+
+    assert result["success"] is True
+    assert install.SERVER_NAME in json.loads(cfg_path.read_text())["mcpServers"]
+
+
+def test_cline_uninstall_is_a_safe_noop_when_never_installed(tmp_path):
+    cfg_path = tmp_path / "does-not-exist-yet" / "cline_mcp_settings.json"
+
+    result = install.uninstall("cline", config_path=cfg_path)
+
+    assert result["success"] is True
+    assert result["changed"] is False
+    assert not cfg_path.exists()
+
+
+# --------------------------------------------------------------------------
 # Claude Code: hooks.UserPromptSubmit shape, not mcpServers
 # --------------------------------------------------------------------------
 def test_install_claude_code_hook_creates_expected_shape(tmp_path):

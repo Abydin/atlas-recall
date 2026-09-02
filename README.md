@@ -34,6 +34,11 @@ directly.
 | Cline (VS Code) | MCP (stdio) | `.../globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` |
 | Codex CLI | MCP (stdio), via `codex mcp add` | `~/.codex/config.toml` |
 
+The Cline path assumes standard VS Code; `recall install --client cline`
+refuses (rather than silently creating a file Cline will never read) if
+that globalStorage directory doesn't exist -- VS Code Insiders and
+VSCodium use a different one, so wire it in by hand in that case.
+
 Every path above was verified against that client's own docs, not
 guessed -- `recall install --client <name>` writes to it directly (merges,
 backs up, idempotent, `--dry-run` to preview). Zed also takes a local
