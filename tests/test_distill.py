@@ -146,6 +146,11 @@ def test_apply_update_carries_forward_existing_priority(cfg, tmp_path):
 
 
 def test_apply_describe_prints_resolved_destination(cfg, tmp_path, capsys):
+    """The human approving needs to see where an op actually writes --
+    for BOTH ADD and UPDATE -- in the pre-approval describe line, not
+    only after the fact in the '-> wrote' confirmation. Declining every
+    op (auto_confirm=False) means the only way these paths can appear in
+    stdout is via _describe itself."""
     ops = [
         {
             "op": "ADD", "name": "new-note", "type": "reference",
@@ -158,7 +163,7 @@ def test_apply_describe_prints_resolved_destination(cfg, tmp_path, capsys):
             "distance": None,
         },
     ]
-    apply_ops(ops, cfg, auto_confirm=lambda op: True)
+    apply_ops(ops, cfg, auto_confirm=lambda op: False)
     out = capsys.readouterr().out
     assert str(tmp_path / "notes" / "new-note.md") in out
     assert str(tmp_path / "notes" / "rule-descale-weekly.md") in out

@@ -89,7 +89,9 @@ def _describe(op: Dict, dest: str) -> str:
         lines.append(f"  description: {op['description']}")
     if op["op"] == "UPDATE":
         lines.append(f"  target: {dest}")
-    elif op.get("matched_memory"):
+    else:
+        lines.append(f"  destination: {dest}")
+    if op["op"] != "UPDATE" and op.get("matched_memory"):
         lines.append(f"  advisory near-duplicate: {op['matched_memory']['name']!r} "
                       f"({op['matched_memory']['path']})")
     body_preview = op["body"].strip().splitlines()[0][:100] if op["body"].strip() else ""
