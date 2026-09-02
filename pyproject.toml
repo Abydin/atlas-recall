@@ -4,17 +4,25 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "atlas-recall"
-version = "0.1.0"
-description = "Deterministic markdown memory for Claude Code: index a directory of notes, retrieve the relevant ones, inject them into a prompt via a hook, and search/trace the same corpus as a wikilink graph. No vector database required."
+version = "0.1.1"
+description = "Deterministic markdown memory and knowledge graph for AI coding agents: BM25+wikilink retrieval over your notes, no vector database required. Ships a Claude Code hook as its first integration."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.9"
-keywords = ["claude-code", "memory", "retrieval", "bm25", "hook", "rag"]
+keywords = ["memory", "retrieval", "bm25", "rag", "knowledge-graph", "wikilinks", "agent-memory", "mcp", "model-context-protocol", "hook", "claude-code"]
 classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Topic :: Software Development :: Libraries",
+    "Topic :: Text Processing :: Indexing",
 ]
 dependencies = [
     "rank-bm25>=0.2.2",

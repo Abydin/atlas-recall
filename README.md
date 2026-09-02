@@ -1,17 +1,25 @@
 # atlas-recall
 
-Deterministic markdown memory for Claude Code: index a directory of notes,
-retrieve the relevant ones, inject them into a prompt via a hook. No vector
-database required.
+Deterministic markdown memory and knowledge graph for AI coding agents:
+index a directory of notes, retrieve the relevant ones, and search/trace
+the same corpus as a wikilink graph. No vector database required, and no
+agent lock-in -- the engine is a plain `recall` CLI, so it works with any
+agent or workflow that can run a shell command.
 
 Retrieval and search are two interfaces on one engine, not two separate
 tools bolted together. The same corpus, the same config, the same index:
-`recall query` answers "what's relevant" automatically for an agent (a
-Claude Code `UserPromptSubmit` hook), and `recall find` / `recall map` /
-`recall trace` answer the same question interactively for a human, plus a
-wikilink graph over your notes -- as of this writing (2026), mem0, Letta,
-and Zep don't ship that combination; check their current docs, this is the
-kind of claim that goes stale.
+`recall query` answers "what's relevant" automatically (wire it into
+anything that can invoke a command per turn), and `recall find` / `recall
+map` / `recall trace` answer the same question interactively for a human,
+plus a wikilink graph over your notes -- as of this writing (2026), mem0,
+Letta, and Zep don't ship that combination; check their current docs, this
+is the kind of claim that goes stale.
+
+Claude Code is the first integration this package ships: a
+`UserPromptSubmit` hook (`recall hook`) that injects retrieval results
+straight into the prompt, no copy-paste. More integrations are planned;
+until they land, any other agent gets the same retrieval and knowledge
+graph by shelling out to the `recall` CLI directly.
 
 ## The problem
 

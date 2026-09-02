@@ -14,4 +14,4 @@ __all__ = [
     "score_docs",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
