@@ -46,6 +46,11 @@ WIKILINK_PLACEHOLDER_DENYLIST = {"name", "link", "links", "their-name", "the-nam
 DDL = """
 PRAGMA journal_mode = WAL;
 
+CREATE TABLE IF NOT EXISTS meta (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS docs (
   id          TEXT PRIMARY KEY,
   type        TEXT NOT NULL,
@@ -237,6 +242,12 @@ class WriterLockBusy(Exception):
     pass
 
 
+class CorpusMismatch(Exception):
+    """Raised when an index db's recorded notes_dir doesn't match the
+    notes_dir of the config asking to use it. Two different corpora must
+    never silently share an index -- see cli._db_path()."""
+
+
 def _lock_path(db_path: Path) -> Path:
     return Path(str(db_path) + ".lock")
 
@@ -267,7 +278,40 @@ def release_writer_lock(fh) -> None:
 # --------------------------------------------------------------------------
 # DB
 # --------------------------------------------------------------------------
-def connect(db_path: Path, fresh: bool = False) -> sqlite3.Connection:
+def _normalize_notes_dir(notes_dir: str) -> str:
+    return os.path.normpath(os.path.abspath(os.path.expanduser(notes_dir)))
+
+
+def _check_or_stamp_corpus(conn: sqlite3.Connection, notes_dir: str) -> None:
+    """Guard against silently serving an index built from a different
+    notes_dir than the one asking to use it. A brand-new, empty db gets
+    stamped with this notes_dir; an existing one gets checked against it.
+    A db with docs in it but no stamp predates corpus tracking -- it can't
+    be verified, so it's refused rather than trusted."""
+    target = _normalize_notes_dir(notes_dir)
+    row = conn.execute("SELECT value FROM meta WHERE key = 'notes_dir'").fetchone()
+    if row is None:
+        has_docs = conn.execute("SELECT 1 FROM docs LIMIT 1").fetchone() is not None
+        if has_docs:
+            raise CorpusMismatch(
+                "index at this path has documents but no recorded notes_dir "
+                f"-- can't verify it was built from {notes_dir!r}. Run "
+                "`recall index --rebuild` to rebuild it cleanly for this "
+                "notes_dir."
+            )
+        conn.execute("INSERT INTO meta(key, value) VALUES('notes_dir', ?)", (target,))
+        conn.commit()
+        return
+    if row[0] != target:
+        raise CorpusMismatch(
+            f"index at this path was built from notes_dir={row[0]!r}, but "
+            f"the active config points at {target!r}. Refusing to serve a "
+            "mismatched corpus -- run `recall index --rebuild` against the "
+            "correct notes_dir."
+        )
+
+
+def connect(db_path: Path, fresh: bool = False, notes_dir: str = None) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     if fresh and db_path.exists():
         db_path.unlink()
@@ -278,6 +322,8 @@ def connect(db_path: Path, fresh: bool = False) -> sqlite3.Connection:
     conn = sqlite3.connect(str(db_path))
     conn.executescript(DDL)
     conn.commit()
+    if notes_dir is not None:
+        _check_or_stamp_corpus(conn, notes_dir)
     return conn
 
 

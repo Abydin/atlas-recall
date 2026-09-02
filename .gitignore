@@ -18,3 +18,4 @@ chroma/
 *.chroma/
 
 .DS_Store
+dist_check/

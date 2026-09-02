@@ -10,11 +10,19 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sqlite3
 import sys
 from pathlib import Path
 
 from . import __version__
-from .config import Config, load_config, save_config, DEFAULT_CONFIG_PATH
+from .config import (
+    Config,
+    load_config,
+    save_config,
+    DEFAULT_CONFIG_PATH,
+    resolve_config_path,
+    default_corpus_dir,
+)
 
 HOOK_BLOCK = """{
   "hooks": {
@@ -32,8 +40,87 @@ HOOK_BLOCK = """{
 }"""
 
 
-def _db_path(cfg: Config) -> Path:
-    return Path(os.path.expanduser(cfg.chroma_dir)).parent / "recall.db"
+def _legacy_meta_notes_dir(legacy_path: Path):
+    """Read notes_dir out of a legacy db's meta table without applying our
+    DDL or touching the file -- we may not own it. Returns the stamped
+    notes_dir, or None if the db predates corpus tracking (no meta table
+    or no row), or None on any read error (treated the same as "can't
+    verify")."""
+    try:
+        conn = sqlite3.connect(f"file:{legacy_path}?mode=ro", uri=True)
+        try:
+            has_meta = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'meta'"
+            ).fetchone()
+            if not has_meta:
+                return None
+            row = conn.execute("SELECT value FROM meta WHERE key = 'notes_dir'").fetchone()
+            return row[0] if row else None
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return None
+
+
+def _migrate_legacy_db(legacy_path: Path, new_path: Path, notes_dir: str) -> bool:
+    """One-time migration off the old shared index path (every notes_dir,
+    every config, one db at chroma_dir's parent -- the bug this module
+    fixes). Claims the legacy db by moving it to `new_path` ONLY when it can
+    be verified to belong to `notes_dir`; otherwise leaves it exactly where
+    it was -- it may belong to a different corpus still reading it under
+    old code, or it may predate corpus tracking entirely and be
+    unverifiable. Never deletes anything. Returns True if it migrated."""
+    from . import knowledge
+
+    target = knowledge._normalize_notes_dir(notes_dir)
+    stamped = _legacy_meta_notes_dir(legacy_path)
+
+    if stamped is None:
+        print(
+            f"index: found an existing index at {legacy_path} with no "
+            f"recorded notes_dir, so it can't be verified against "
+            f"{notes_dir!r}. Leaving it in place -- run `recall index` to "
+            f"build a fresh index for this notes_dir. If {legacy_path} was "
+            f"in fact built from this notes_dir, delete it afterward to "
+            f"reclaim the disk space once the new index looks right; "
+            f"otherwise it's safe to leave alone.",
+            file=sys.stderr,
+        )
+        return False
+
+    if knowledge._normalize_notes_dir(stamped) != target:
+        # Belongs to a different corpus. Not an error, not our problem --
+        # just don't touch it.
+        return False
+
+    new_path.parent.mkdir(parents=True, exist_ok=True)
+    for suffix in ("", "-wal", "-shm"):
+        src = Path(str(legacy_path) + suffix)
+        if src.exists():
+            src.rename(str(new_path) + suffix)
+    lock_src = Path(str(legacy_path) + ".lock")
+    if lock_src.exists():
+        try:
+            lock_src.unlink()
+        except OSError:
+            pass
+    print(f"index: migrated existing index from {legacy_path} to {new_path}", file=sys.stderr)
+    return True
+
+
+def _db_path(cfg: Config, config_path: str = None) -> Path:
+    """Per-corpus index db path -- see config.default_corpus_dir(). Falls
+    back to migrating an index found at the old shared path (chroma_dir's
+    parent, the same for every notes_dir/config) the first time this corpus
+    is asked for, so upgrading users don't silently lose an index."""
+    config_path = config_path or resolve_config_path()
+    new_path = Path(default_corpus_dir(config_path, cfg.notes_dir)) / "recall.db"
+    if new_path.exists():
+        return new_path
+    legacy_path = Path(os.path.expanduser(cfg.chroma_dir)).parent / "recall.db"
+    if legacy_path.exists() and legacy_path != new_path:
+        _migrate_legacy_db(legacy_path, new_path, cfg.notes_dir)
+    return new_path
 
 
 def cmd_init(args) -> int:
@@ -98,9 +185,9 @@ def cmd_index(args) -> int:
         return 0
     try:
         if args.rebuild:
-            conn = knowledge.connect(db_path, fresh=True)
+            conn = knowledge.connect(db_path, fresh=True, notes_dir=cfg.notes_dir)
         else:
-            conn = knowledge.connect(db_path, fresh=False)
+            conn = knowledge.connect(db_path, fresh=False, notes_dir=cfg.notes_dir)
         stats = knowledge.run_index_pass(conn, Path(cfg.notes_dir), full=args.rebuild or args.full)
         conn.close()
     finally:
@@ -161,7 +248,7 @@ def cmd_find(args) -> int:
         return 1
     from . import knowledge
 
-    conn = knowledge.connect(_db_path(cfg))
+    conn = knowledge.connect(_db_path(cfg), notes_dir=cfg.notes_dir)
     try:
         rows = knowledge.find(conn, " ".join(args.query), doc_type=args.type, n=args.n)
     except Exception as e:  # noqa: BLE001
@@ -181,7 +268,7 @@ def cmd_node(args) -> int:
     cfg = load_config()
     from . import knowledge
 
-    conn = knowledge.connect(_db_path(cfg))
+    conn = knowledge.connect(_db_path(cfg), notes_dir=cfg.notes_dir)
     n = knowledge.node(conn, args.id)
     conn.commit()
     if not n:
@@ -208,7 +295,7 @@ def cmd_trace(args) -> int:
     cfg = load_config()
     from . import knowledge
 
-    conn = knowledge.connect(_db_path(cfg))
+    conn = knowledge.connect(_db_path(cfg), notes_dir=cfg.notes_dir)
     root = conn.execute("SELECT id FROM docs WHERE id = ?", (args.id,)).fetchone()
     if not root:
         print(f"trace: not found: {args.id}", file=sys.stderr)
@@ -228,7 +315,7 @@ def cmd_map(args) -> int:
     cfg = load_config()
     from . import knowledge
 
-    conn = knowledge.connect(_db_path(cfg))
+    conn = knowledge.connect(_db_path(cfg), notes_dir=cfg.notes_dir)
     result = knowledge.map_topic(conn, " ".join(args.topic), n=args.n)
     if not result["hits"]:
         print(f"map: no notes matched {result['topic']!r}", file=sys.stderr)
@@ -258,7 +345,7 @@ def cmd_verify(args) -> int:
         print("verify: another indexer is running, skipping", file=sys.stderr)
         return 0
     try:
-        conn = knowledge.connect(db_path)
+        conn = knowledge.connect(db_path, notes_dir=cfg.notes_dir)
         result = knowledge.verify(conn, limit=args.limit)
     finally:
         knowledge.release_writer_lock(lock)

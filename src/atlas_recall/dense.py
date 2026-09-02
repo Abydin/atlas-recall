@@ -14,7 +14,7 @@ import os
 import socket
 from typing import Dict, List
 
-from .config import Config
+from .config import Config, resolve_chroma_dir, resolve_config_path
 from .corpus import load_corpus
 
 
@@ -37,9 +37,9 @@ def _embedding_function(cfg: Config):
     )
 
 
-def _collection(cfg: Config, delete_existing: bool = False):
+def _collection(cfg: Config, delete_existing: bool = False, config_path: str = None):
     import chromadb
-    chroma_dir = os.path.expanduser(cfg.chroma_dir)
+    chroma_dir = resolve_chroma_dir(cfg, config_path or resolve_config_path())
     os.makedirs(chroma_dir, exist_ok=True)
     client = chromadb.PersistentClient(path=chroma_dir)
     ef = _embedding_function(cfg)
@@ -55,14 +55,14 @@ def _collection(cfg: Config, delete_existing: bool = False):
     )
 
 
-def index_dense(cfg: Config) -> int:
+def index_dense(cfg: Config, config_path: str = None) -> int:
     """(Re)index cfg.notes_dir into the configured Chroma collection.
     Returns the number of documents indexed. Raises if chromadb isn't
     installed or Ollama isn't reachable -- callers surface that plainly,
     this function does not degrade silently (indexing is an explicit,
     opt-in action, unlike query-time retrieval)."""
     docs = load_corpus(cfg.notes_dir)
-    col = _collection(cfg, delete_existing=True)
+    col = _collection(cfg, delete_existing=True, config_path=config_path)
     if not docs:
         return 0
     ids = [d["key"] for d in docs]
@@ -75,12 +75,12 @@ def index_dense(cfg: Config) -> int:
     return len(ids)
 
 
-def query_dense(query: str, cfg: Config, topn: int = 15) -> List[Dict]:
+def query_dense(query: str, cfg: Config, topn: int = 15, config_path: str = None) -> List[Dict]:
     """Return ranked hits from the dense collection: [{name, path, distance}].
     Raises on any failure (chromadb absent, Ollama down, empty/missing
     collection) -- callers (retrieval.py) catch this and fuse with BM25
     only, which is the documented degrade path."""
-    col = _collection(cfg)
+    col = _collection(cfg, config_path=config_path)
     if col.count() == 0:
         raise RuntimeError(f"empty dense index (collection={cfg.collection!r}) -- run `recall index --dense` first")
     res = col.query(query_texts=[query], n_results=topn)

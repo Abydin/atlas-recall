@@ -50,7 +50,10 @@ def _conn_or_error():
     cfg, err = _cfg_or_error()
     if err:
         return None, err
-    return knowledge.connect(_db_path(cfg)), None
+    try:
+        return knowledge.connect(_db_path(cfg), notes_dir=cfg.notes_dir), None
+    except knowledge.CorpusMismatch as e:
+        return None, {"error": str(e)}
 
 
 @mcp.tool()
@@ -168,9 +171,11 @@ def recall_verify(limit: int = 50) -> dict[str, Any]:
     except knowledge.WriterLockBusy:
         return {"error": "another indexer is running, try again shortly"}
     try:
-        conn = knowledge.connect(db_path)
+        conn = knowledge.connect(db_path, notes_dir=cfg.notes_dir)
         result = knowledge.verify(conn, limit=limit)
         conn.close()
+    except knowledge.CorpusMismatch as e:
+        return {"error": str(e)}
     finally:
         knowledge.release_writer_lock(lock)
     return result
