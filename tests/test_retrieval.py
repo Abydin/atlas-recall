@@ -64,3 +64,23 @@ def test_score_docs_never_raises_when_dense_enabled_but_unreachable(cfg):
     docs = load_corpus(cfg.notes_dir)
     scored = score_docs("em dash", docs, cfg)
     assert scored  # BM25 alone still finds it
+
+
+def test_load_corpus_warns_on_skipped_dataless_files(cfg, capsys, monkeypatch):
+    """A dataless (iCloud-evicted) file gets skipped rather than hanging
+    the read -- but skipping it silently just makes the corpus smaller
+    with no signal. Must surface the count and point at `recall warm`."""
+    import atlas_recall.corpus as corpus_mod
+
+    real_is_dataless = corpus_mod.is_dataless
+    calls = {"n": 0}
+
+    def fake_is_dataless(path):
+        calls["n"] += 1
+        return calls["n"] == 1  # pretend the first file found is dataless
+
+    monkeypatch.setattr(corpus_mod, "is_dataless", fake_is_dataless)
+    load_corpus(cfg.notes_dir)
+    err = capsys.readouterr().err
+    assert "1" in err
+    assert "recall warm" in err

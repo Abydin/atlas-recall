@@ -13,6 +13,7 @@ import os
 import sys
 from pathlib import Path
 
+from . import __version__
 from .config import Config, load_config, save_config, DEFAULT_CONFIG_PATH
 
 HOOK_BLOCK = """{
@@ -268,6 +269,7 @@ def cmd_warm(args) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="recall", description="Deterministic markdown memory for Claude Code.")
+    p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = p.add_subparsers(dest="command", required=True)
 
     sp = sub.add_parser("init", help="configure a notes directory and print the hook block")

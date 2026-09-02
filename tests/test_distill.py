@@ -46,6 +46,17 @@ def test_find_duplicates_bm25_fallback_when_dense_off(cfg):
     assert hits[0]["name"] == "feedback-no-em-dashes"
 
 
+def test_find_duplicates_reports_priority_not_type(cfg):
+    """A note's priority (hard-rule|high|normal) and a candidate's type
+    (feedback|project|user|reference) are disjoint vocabularies -- the
+    BM25 dedup hit dict must label the value it actually carries."""
+    hits = find_duplicates("em dash outward", cfg)
+    assert hits
+    assert "priority" in hits[0]
+    assert hits[0]["priority"] == "hard-rule"
+    assert "type" not in hits[0]
+
+
 def test_apply_never_writes_without_confirmation(cfg, tmp_path):
     ops = [{
         "op": "ADD", "name": "new-note", "type": "reference",

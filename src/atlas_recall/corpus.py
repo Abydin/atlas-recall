@@ -14,6 +14,7 @@ from __future__ import annotations
 import glob
 import os
 import re
+import sys
 import time
 from typing import Dict, List
 
@@ -104,6 +105,14 @@ def load_corpus(notes_dir: str) -> List[Dict]:
             "body": body.strip(),
             "tokens_text": f"{name} {description} {body}",
         })
+
+    if skipped_dataless:
+        print(
+            f"[recall] {skipped_dataless} note(s) under {notes_dir} skipped "
+            f"(iCloud-evicted / dataless) -- run `recall warm` to materialize "
+            f"them so they're searched",
+            file=sys.stderr,
+        )
 
     return docs
 

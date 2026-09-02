@@ -86,7 +86,7 @@ def find_duplicates(query: str, cfg: Config, docs: Optional[List[Dict]] = None, 
                         "name": h["name"],
                         "description": d["description"] if d else "",
                         "path": h["path"],
-                        "type": (d or {}).get("priority", "reference"),
+                        "priority": (d or {}).get("priority", "normal"),
                         "distance": h["distance"],
                     })
                 return out
@@ -105,7 +105,7 @@ def find_duplicates(query: str, cfg: Config, docs: Optional[List[Dict]] = None, 
             continue
         out.append({
             "name": d["name"], "description": d["description"], "path": d["path"],
-            "type": d.get("priority", "reference"), "distance": None,
+            "priority": d.get("priority", "normal"), "distance": None,
         })
     return out
 
