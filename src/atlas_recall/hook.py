@@ -71,6 +71,16 @@ def _rules_block(cfg: Config) -> str:
         import os
         text = open(os.path.expanduser(cfg.rules_path), encoding="utf-8").read().strip()
     except OSError:
+        # A typo'd or iCloud-evicted rules_path must still degrade to
+        # exit 0 with nothing injected -- but silently vanishing a block
+        # literally labeled "HARD RULES (enforced)" with no diagnostic
+        # is its own failure mode. Warn loudly on stderr (stdout stays
+        # pure JSON for the hook contract) and still return "".
+        print(
+            f"[recall hook] WARN: rules_path {cfg.rules_path!r} unreadable -- "
+            f"HARD RULES NOT INJECTED this turn",
+            file=sys.stderr,
+        )
         return ""
     if not text:
         return ""
