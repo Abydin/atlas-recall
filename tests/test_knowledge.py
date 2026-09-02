@@ -21,6 +21,38 @@ def test_find_matches_body_text(notes_dir, tmp_path):
     assert any(h["id"] == "rule-descale-weekly" for h in hits)
 
 
+def test_list_docs_returns_all_indexed_notes(notes_dir, tmp_path):
+    conn = _fresh_conn(tmp_path)
+    knowledge.run_index_pass(conn, Path(notes_dir), full=True)
+    rows = knowledge.list_docs(conn)
+    assert {r["id"] for r in rows} == {
+        "rule-descale-weekly",
+        "reference-bike-maintenance-log",
+        "gear-inventory",
+        "rule-check-tire-pressure",
+        "loose-ride-notes",
+    }
+
+
+def test_list_docs_filters_by_type(notes_dir, tmp_path):
+    conn = _fresh_conn(tmp_path)
+    knowledge.run_index_pass(conn, Path(notes_dir), full=True)
+    rows = knowledge.list_docs(conn, doc_type="reference")
+    assert rows == [{
+        "id": "reference-bike-maintenance-log", "type": "reference",
+        "title": "reference-bike-maintenance-log",
+        "description": "where the bike maintenance log lives and how it's updated",
+        "path": rows[0]["path"], "mtime": rows[0]["mtime"],
+    }]
+
+
+def test_list_docs_respects_limit(notes_dir, tmp_path):
+    conn = _fresh_conn(tmp_path)
+    knowledge.run_index_pass(conn, Path(notes_dir), full=True)
+    rows = knowledge.list_docs(conn, limit=2)
+    assert len(rows) == 2
+
+
 def test_node_reports_wikilink_edge(notes_dir, tmp_path):
     conn = _fresh_conn(tmp_path)
     knowledge.run_index_pass(conn, Path(notes_dir), full=True)

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "atlas-recall"
-version = "0.1.1"
-description = "Deterministic markdown memory and knowledge graph for AI coding agents: BM25+wikilink retrieval over your notes, no vector database required. Ships a Claude Code hook as its first integration."
+version = "0.2.0"
+description = "Deterministic markdown memory and knowledge graph for AI agents: BM25+wikilink retrieval, an MCP server, and a Claude Code hook, no vector database required."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.9"
@@ -33,6 +33,13 @@ dense = [
     "chromadb>=0.5.0",
     "ollama>=0.3.0",
 ]
+# The MCP server needs Python 3.10+ (the SDK's floor, not this package's --
+# everything else here stays on the 3.9 floor). Pinned <2: mcp 2.x renamed
+# FastMCP to MCPServer and changed the decorator API server.py uses; see
+# https://py.sdk.modelcontextprotocol.io/v2/migration/#fastmcp-renamed-to-mcpserver
+mcp = [
+    "mcp[cli]>=1.2.0,<2; python_version >= '3.10'",
+]
 dev = [
     "pytest>=7.0",
 ]
@@ -43,6 +50,7 @@ Issues = "https://github.com/Abydin/atlas-recall/issues"
 
 [project.scripts]
 recall = "atlas_recall.cli:main"
+atlas-recall-mcp = "atlas_recall._mcp_entry:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

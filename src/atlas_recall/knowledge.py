@@ -409,6 +409,21 @@ def find(conn, query: str, doc_type: Optional[str] = None, n: int = 8) -> List[D
     return [{"id": r[0], "type": r[1], "title": r[2], "description": r[3], "path": r[4]} for r in rows]
 
 
+def list_docs(conn, doc_type: Optional[str] = None, limit: int = 100) -> List[Dict]:
+    sql = "SELECT id, type, title, description, path, mtime FROM docs"
+    params: List = []
+    if doc_type:
+        sql += " WHERE type = ?"
+        params.append(doc_type)
+    sql += " ORDER BY mtime DESC LIMIT ?"
+    params.append(limit)
+    rows = conn.execute(sql, params).fetchall()
+    return [
+        {"id": r[0], "type": r[1], "title": r[2], "description": r[3], "path": r[4], "mtime": r[5]}
+        for r in rows
+    ]
+
+
 def node(conn, doc_id: str) -> Optional[Dict]:
     row = conn.execute(
         "SELECT id, type, title, description, path, mtime, body FROM docs WHERE id = ?", (doc_id,)
