@@ -5,44 +5,90 @@ The human-approval half of propose-only curation.
 package that does, and it never writes without an explicit yes for that
 specific op -- there is no batch "approve all" here on purpose. Read each
 op, show the diff, ask.
+
+Every write is resolved against notes_dir before it happens, never taken
+on faith from an op's fields: `apply_ops` also runs standalone against a
+JSON file (`recall distill-apply proposed.json`), so an op here may never
+have passed through `distill.py`'s own `clean_slug`/corpus-matching at
+all -- it could be hand-edited or come from an untrusted source. ADD and
+UPDATE destinations are both re-derived and validated here, not trusted
+from the op.
 """
 from __future__ import annotations
 
 import os
-import sys
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 
 from .config import Config
+from .corpus import load_corpus
+from .distill import clean_slug
 
 
-def _write_add(cfg: Config, op: Dict) -> str:
-    path = os.path.join(os.path.expanduser(cfg.notes_dir), f"{op['name']}.md")
-    content = (
-        f"---\nname: {op['name']}\ndescription: {op['description']}\n"
-        f"priority: normal\n---\n\n{op['body']}\n"
-    )
-    with open(path, "w", encoding="utf-8") as fh:
-        fh.write(content)
+def _resolve_within_notes_dir(cfg: Config, path: str) -> str:
+    """Refuse `path` unless it resolves (real, symlink-following) inside
+    `cfg.notes_dir`. Raises ValueError on escape."""
+    notes_real = os.path.realpath(os.path.expanduser(cfg.notes_dir))
+    path_real = os.path.realpath(path)
+    if os.path.commonpath([notes_real, path_real]) != notes_real:
+        raise ValueError(f"refusing to write outside notes_dir: {path!r}")
     return path
 
 
-def _write_update(cfg: Config, op: Dict) -> str:
-    target_path = op["matched_memory"]["path"]
+def _dest_in_notes_dir(cfg: Config, stem: str) -> str:
+    """Resolve `<notes_dir>/<stem>.md` for a NEW note name, refusing
+    anything that isn't already a clean slug (traversal, absolute paths,
+    and anything clean_slug would have to sanitize are all rejected
+    outright rather than silently rewritten) -- plus the realpath/
+    commonpath check as defense in depth against a symlinked notes_dir."""
+    if clean_slug(stem) != stem:
+        raise ValueError(f"unsafe note name: {stem!r}")
+    path = os.path.join(os.path.expanduser(cfg.notes_dir), f"{stem}.md")
+    return _resolve_within_notes_dir(cfg, path)
+
+
+def _resolve_update_target(cfg: Config, op: Dict) -> Tuple[Dict, str]:
+    """Re-resolve an UPDATE's target BY NAME against the live corpus --
+    `op['matched_memory']['path']` is never trusted, it could be forged.
+    Raises ValueError if the named target no longer exists in the corpus,
+    or if the corpus's own path for it somehow escapes notes_dir."""
+    name = op["matched_memory"]["name"]
+    docs = load_corpus(cfg.notes_dir)
+    target = next((d for d in docs if d["name"] == name), None)
+    if target is None:
+        raise ValueError(f"update target no longer exists in the corpus: {name!r}")
+    dest = _resolve_within_notes_dir(cfg, target["path"])
+    return target, dest
+
+
+def _write_add(dest: str, op: Dict) -> str:
     content = (
         f"---\nname: {op['name']}\ndescription: {op['description']}\n"
         f"priority: normal\n---\n\n{op['body']}\n"
     )
-    with open(target_path, "w", encoding="utf-8") as fh:
+    with open(dest, "w", encoding="utf-8") as fh:
         fh.write(content)
-    return target_path
+    return dest
 
 
-def _describe(op: Dict) -> str:
+def _write_update(dest: str, target: Dict, op: Dict) -> str:
+    # Carry the target's real priority forward -- never downgrade a
+    # hard-rule/high note to normal just because it went through UPDATE.
+    priority = target.get("priority", "normal")
+    content = (
+        f"---\nname: {op['name']}\ndescription: {op['description']}\n"
+        f"priority: {priority}\n---\n\n{op['body']}\n"
+    )
+    with open(dest, "w", encoding="utf-8") as fh:
+        fh.write(content)
+    return dest
+
+
+def _describe(op: Dict, dest: str) -> str:
     lines = [f"{op['op']} {op['name']!r} (type={op['type']})"]
     if op.get("description"):
         lines.append(f"  description: {op['description']}")
     if op["op"] == "UPDATE":
-        lines.append(f"  target: {op['matched_memory']['path']}")
+        lines.append(f"  target: {dest}")
     elif op.get("matched_memory"):
         lines.append(f"  advisory near-duplicate: {op['matched_memory']['name']!r} "
                       f"({op['matched_memory']['path']})")
@@ -55,10 +101,20 @@ def apply_ops(ops: List[Dict], cfg: Config, auto_confirm=None) -> Dict:
     """Walk each proposed op, print it, ask for approval, write only on
     yes. `auto_confirm` is a callable(op) -> bool for non-interactive use
     (tests, scripting); interactive stdin y/n otherwise. Returns a summary
-    dict. NEVER applies anything the caller didn't explicitly approve."""
+    dict. NEVER applies anything the caller didn't explicitly approve.
+
+    Destination resolution (and its ValueError on an unsafe name/target)
+    happens before the prompt is shown, on purpose: the human approving
+    needs to see where it actually writes, not the name the op claims."""
     applied, skipped = [], []
     for op in ops:
-        print(_describe(op))
+        target_doc: Optional[Dict] = None
+        if op["op"] == "ADD":
+            dest = _dest_in_notes_dir(cfg, op["name"])
+        else:
+            target_doc, dest = _resolve_update_target(cfg, op)
+
+        print(_describe(op, dest))
         if auto_confirm is not None:
             ok = auto_confirm(op)
         else:
@@ -69,9 +125,9 @@ def apply_ops(ops: List[Dict], cfg: Config, auto_confirm=None) -> Dict:
             skipped.append(op["name"])
             continue
         if op["op"] == "ADD":
-            path = _write_add(cfg, op)
+            path = _write_add(dest, op)
         else:
-            path = _write_update(cfg, op)
+            path = _write_update(dest, target_doc, op)
         print(f"  -> wrote {path}\n")
         applied.append(op["name"])
     return {"applied": applied, "skipped": skipped}
