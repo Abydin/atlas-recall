@@ -53,8 +53,8 @@ isn't shipped here.
 
 ## The problem
 
-Claude Code forgets everything between sessions unless you paste context in
-by hand. The usual fix is a vector database: embed every note, embed the
+AI coding agents forget everything between sessions unless you paste context
+in by hand. The usual fix is a vector database: embed every note, embed the
 query, take the top-K by cosine distance. In practice that ceiling doesn't
 discriminate well on a personal notes corpus (tens to low hundreds of
 files), it needs an embedding model running somewhere, and it's one more
