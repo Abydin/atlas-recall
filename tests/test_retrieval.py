@@ -84,3 +84,18 @@ def test_load_corpus_warns_on_skipped_dataless_files(cfg, capsys, monkeypatch):
     err = capsys.readouterr().err
     assert "1" in err
     assert "recall warm" in err
+
+
+def test_recursive_duplicate_names_keep_distinct_retrieval_keys(tmp_path, cfg):
+    notes = tmp_path / "recursive-notes"
+    (notes / "one").mkdir(parents=True)
+    (notes / "two").mkdir()
+    (notes / "one" / "shared.md").write_text("alpha-only", encoding="utf-8")
+    (notes / "two" / "shared.md").write_text("beta-only", encoding="utf-8")
+    (notes / "other.md").write_text("unrelated", encoding="utf-8")
+    cfg.notes_dir = str(notes)
+
+    docs = load_corpus(cfg.notes_dir)
+    assert {d["key"] for d in docs} == {"one/shared", "two/shared", "other"}
+    hits = top_pointers("alpha-only", cfg, docs=docs)
+    assert [p["key"] for p in hits] == ["one/shared"]

@@ -63,7 +63,7 @@ def test_apply_never_writes_without_confirmation(cfg, tmp_path):
         "description": "d", "body": "body text", "matched_memory": None, "distance": None,
     }]
     summary = apply_ops(ops, cfg, auto_confirm=lambda op: False)
-    assert summary == {"applied": [], "skipped": ["new-note"]}
+    assert summary == {"applied": [], "skipped": ["new-note"], "errors": []}
     assert not (tmp_path / "notes" / "new-note.md").exists()
 
 
@@ -79,20 +79,66 @@ def test_apply_writes_only_on_explicit_yes(cfg, tmp_path):
     assert "body text" in written.read_text()
 
 
+def test_apply_add_refuses_to_overwrite_existing_note(cfg, tmp_path):
+    existing = tmp_path / "notes" / "existing.md"
+    existing.write_text("original content", encoding="utf-8")
+    ops = [{
+        "op": "ADD", "name": "existing", "type": "reference",
+        "description": "d", "body": "replacement", "matched_memory": None, "distance": None,
+    }]
+    summary = apply_ops(ops, cfg, auto_confirm=lambda op: True)
+    assert summary["applied"] == []
+    assert len(summary["errors"]) == 1
+    assert summary["errors"][0]["name"] == "existing"
+    assert "overwrite" in summary["errors"][0]["error"]
+    assert existing.read_text(encoding="utf-8") == "original content"
+
+
 def test_apply_add_refuses_path_escaping_notes_dir(cfg, tmp_path):
     """CWE-22: an ADD op with a dirty/traversal name must never write
-    outside notes_dir, and must raise rather than silently sanitize and
-    write somewhere unexpected inside it."""
-    import pytest
-
+    outside notes_dir, and must be reported as an error rather than
+    silently sanitized and written somewhere unexpected inside it."""
     ops = [{
         "op": "ADD", "name": "../pwn/escaped", "type": "reference",
         "description": "d", "body": "body text", "matched_memory": None, "distance": None,
     }]
-    with pytest.raises(ValueError):
-        apply_ops(ops, cfg, auto_confirm=lambda op: True)
+    summary = apply_ops(ops, cfg, auto_confirm=lambda op: True)
+    assert summary["applied"] == []
+    assert len(summary["errors"]) == 1
     assert not (tmp_path / "pwn").exists()
     assert not any(p.name == "escaped.md" for p in (tmp_path / "notes").rglob("*.md"))
+
+
+def test_apply_one_colliding_add_does_not_abort_the_rest_of_the_batch(cfg, tmp_path):
+    """A three-op batch where the middle ADD collides with an existing
+    note must still apply the ops before and after it -- the colliding
+    op is reported as an error, not raised, so it can't cut the loop
+    short and strand later, otherwise-valid ops unwritten."""
+    existing = tmp_path / "notes" / "existing.md"
+    existing.write_text("original content", encoding="utf-8")
+    ops = [
+        {
+            "op": "ADD", "name": "first-new", "type": "reference",
+            "description": "d", "body": "first body", "matched_memory": None, "distance": None,
+        },
+        {
+            "op": "ADD", "name": "existing", "type": "reference",
+            "description": "d", "body": "replacement", "matched_memory": None, "distance": None,
+        },
+        {
+            "op": "ADD", "name": "third-new", "type": "reference",
+            "description": "d", "body": "third body", "matched_memory": None, "distance": None,
+        },
+    ]
+    summary = apply_ops(ops, cfg, auto_confirm=lambda op: True)
+    assert summary["applied"] == ["first-new", "third-new"]
+    assert summary["errors"] == [{
+        "name": "existing",
+        "error": f"refusing to overwrite existing note: {existing}",
+    }]
+    assert (tmp_path / "notes" / "first-new.md").exists()
+    assert (tmp_path / "notes" / "third-new.md").exists()
+    assert existing.read_text(encoding="utf-8") == "original content"
 
 
 def test_apply_update_ignores_forged_matched_memory_path(cfg, tmp_path):
@@ -116,17 +162,17 @@ def test_apply_update_ignores_forged_matched_memory_path(cfg, tmp_path):
     assert "new body text" in real_note.read_text()
 
 
-def test_apply_update_raises_when_target_no_longer_exists(cfg):
-    import pytest
-
+def test_apply_update_reports_error_when_target_no_longer_exists(cfg):
     ops = [{
         "op": "UPDATE", "name": "ghost", "type": "feedback",
         "description": "d", "body": "new body text",
         "matched_memory": {"name": "note-that-was-deleted", "path": "/tmp/whatever.md"},
         "distance": None,
     }]
-    with pytest.raises(ValueError):
-        apply_ops(ops, cfg, auto_confirm=lambda op: True)
+    summary = apply_ops(ops, cfg, auto_confirm=lambda op: True)
+    assert summary["applied"] == []
+    assert len(summary["errors"]) == 1
+    assert summary["errors"][0]["name"] == "ghost"
 
 
 def test_apply_update_carries_forward_existing_priority(cfg, tmp_path):

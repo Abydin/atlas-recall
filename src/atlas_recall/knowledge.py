@@ -225,11 +225,17 @@ def parse_doc(path: Path) -> Dict:
     doc_type = infer_type(meta, stem) if meta else "doc"
     title = infer_title(meta, body, stem)
     description = meta.get("description", "") if isinstance(meta.get("description"), str) else ""
-    mtime = int(path.stat().st_mtime)
+    # The normal incremental path must distinguish edits made within one
+    # second; second-resolution mtimes silently skipped those changes.
+    # Nanoseconds, not seconds -- distinct from corpus.py's doc["mtime"]
+    # (epoch seconds). Named mtime_ns everywhere it crosses an API boundary
+    # (this dict, the docs table, node()/list_docs()) so the unit is never
+    # ambiguous to a caller.
+    mtime_ns = path.stat().st_mtime_ns
     content_hash = sha256_of(raw)
     return {
         "id": doc_id, "type": doc_type, "title": title, "description": description,
-        "path": str(path), "mtime": mtime, "hash": content_hash, "body": body,
+        "path": str(path), "mtime_ns": mtime_ns, "hash": content_hash, "body": body,
         "meta": meta,
     }
 
@@ -336,12 +342,12 @@ def upsert_doc(conn, d: Dict) -> None:
     if existing:
         conn.execute(
             "UPDATE docs SET type=?, title=?, description=?, path=?, mtime=?, hash=?, body=? WHERE id=?",
-            (d["type"], d["title"], d["description"], d["path"], d["mtime"], d["hash"], d["body"], d["id"]),
+            (d["type"], d["title"], d["description"], d["path"], d["mtime_ns"], d["hash"], d["body"], d["id"]),
         )
     else:
         conn.execute(
             "INSERT INTO docs(id, type, title, description, path, mtime, hash, body) VALUES(?,?,?,?,?,?,?,?)",
-            (d["id"], d["type"], d["title"], d["description"], d["path"], d["mtime"], d["hash"], d["body"]),
+            (d["id"], d["type"], d["title"], d["description"], d["path"], d["mtime_ns"], d["hash"], d["body"]),
         )
 
 
@@ -401,15 +407,29 @@ def run_index_pass(conn, notes_dir: Path, full: bool = True) -> Dict:
         path_str = str(path)
         prior = existing_paths.get(path_str)
         try:
-            mtime = int(path.stat().st_mtime)
+            mtime = path.stat().st_mtime_ns
         except OSError:
             continue
         if (not full) and prior is not None and prior[2] == mtime:
             unchanged += 1
             continue
         d = parse_doc(path)
+        # A frontmatter name is the graph ID. If it changed for an existing
+        # path, discard the former ID instead of leaving a stale, searchable
+        # duplicate row behind.
+        if prior is not None and prior[1] != d["id"]:
+            conn.execute("DELETE FROM docs WHERE id = ?", (prior[1],))
+            conn.execute("DELETE FROM edges WHERE src = ?", (prior[1],))
+
+        # Two files claiming the same graph ID cannot be represented without
+        # silently replacing one another. Fail the index pass loudly instead.
+        owner = conn.execute("SELECT path FROM docs WHERE id = ?", (d["id"],)).fetchone()
+        if owner is not None and owner[0] != path_str:
+            raise ValueError(
+                f"duplicate note id {d['id']!r}: {owner[0]!r} and {path_str!r}"
+            )
         if (not full) and prior is not None and prior[3] == d["hash"]:
-            conn.execute("UPDATE docs SET mtime=? WHERE id=?", (d["mtime"], d["id"]))
+            conn.execute("UPDATE docs SET mtime=? WHERE id=?", (d["mtime_ns"], d["id"]))
             unchanged += 1
             continue
         upsert_doc(conn, d)
@@ -465,7 +485,7 @@ def list_docs(conn, doc_type: Optional[str] = None, limit: int = 100) -> List[Di
     params.append(limit)
     rows = conn.execute(sql, params).fetchall()
     return [
-        {"id": r[0], "type": r[1], "title": r[2], "description": r[3], "path": r[4], "mtime": r[5]}
+        {"id": r[0], "type": r[1], "title": r[2], "description": r[3], "path": r[4], "mtime_ns": r[5]}
         for r in rows
     ]
 
@@ -487,7 +507,7 @@ def node(conn, doc_id: str) -> Optional[Dict]:
         edges.append({"dst": dst, "kind": kind, "target_title": t[0] if t else dst, "divergent": bool(div)})
     return {
         "id": row[0], "type": row[1], "title": row[2], "description": row[3],
-        "path": row[4], "mtime": row[5], "body": row[6], "edges": edges,
+        "path": row[4], "mtime_ns": row[5], "body": row[6], "edges": edges,
     }
 
 

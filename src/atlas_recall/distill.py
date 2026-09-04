@@ -81,7 +81,7 @@ def find_duplicates(query: str, cfg: Config, docs: Optional[List[Dict]] = None, 
                 by_key = {d["key"]: d for d in docs}
                 out = []
                 for h in hits:
-                    d = by_key.get(h["name"])
+                    d = by_key.get(h["key"])
                     out.append({
                         "name": h["name"],
                         "description": d["description"] if d else "",

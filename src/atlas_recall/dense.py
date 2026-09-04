@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import socket
+import sys
 from typing import Dict, List
 
 from .config import Config, resolve_chroma_dir, resolve_config_path
@@ -68,7 +69,7 @@ def index_dense(cfg: Config, config_path: str = None) -> int:
     ids = [d["key"] for d in docs]
     texts = [f"{d['name']}\n{d['description']}\n\n{d['body']}" for d in docs]
     metas = [
-        {"name": d["name"], "description": d["description"], "path": d["path"]}
+        {"key": d["key"], "name": d["name"], "description": d["description"], "path": d["path"]}
         for d in docs
     ]
     col.upsert(ids=ids, documents=texts, metadatas=metas)
@@ -76,7 +77,7 @@ def index_dense(cfg: Config, config_path: str = None) -> int:
 
 
 def query_dense(query: str, cfg: Config, topn: int = 15, config_path: str = None) -> List[Dict]:
-    """Return ranked hits from the dense collection: [{name, path, distance}].
+    """Return ranked hits from the dense collection: [{key, name, path, distance}].
     Raises on any failure (chromadb absent, Ollama down, empty/missing
     collection) -- callers (retrieval.py) catch this and fuse with BM25
     only, which is the documented degrade path."""
@@ -84,7 +85,23 @@ def query_dense(query: str, cfg: Config, topn: int = 15, config_path: str = None
     if col.count() == 0:
         raise RuntimeError(f"empty dense index (collection={cfg.collection!r}) -- run `recall index --dense` first")
     res = col.query(query_texts=[query], n_results=topn)
-    return [
-        {"name": m["name"], "path": m.get("path", ""), "distance": dist}
-        for m, dist in zip(res["metadatas"][0], res["distances"][0])
-    ]
+    hits = []
+    stale = False
+    for m, dist in zip(res["metadatas"][0], res["distances"][0]):
+        key = m.get("key")
+        if key is None:
+            # Pre-key-format index (built before path-relative retrieval
+            # keys existed): fall back to name so we degrade to old
+            # collision-prone behaviour instead of raising, but still
+            # tell the user loudly -- a silent fallback here is exactly
+            # the kind of schema mismatch that must not go unreported.
+            stale = True
+            key = m.get("name", "")
+        hits.append({"key": key, "name": m.get("name", ""), "path": m.get("path", ""), "distance": dist})
+    if stale:
+        print(
+            "[recall] dense index predates the current key format and may mis-resolve "
+            "notes with duplicate filenames -- run `recall index --dense` to rebuild it.",
+            file=sys.stderr,
+        )
+    return hits

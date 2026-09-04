@@ -377,7 +377,7 @@ def cmd_distill_apply(args) -> int:
     ops = json.loads(raw)
     summary = apply_ops(ops, cfg)
     print(json.dumps(summary, indent=2))
-    return 0
+    return 1 if summary["errors"] else 0
 
 
 def cmd_warm(args) -> int:

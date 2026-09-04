@@ -43,7 +43,13 @@ def _dest_in_notes_dir(cfg: Config, stem: str) -> str:
     if clean_slug(stem) != stem:
         raise ValueError(f"unsafe note name: {stem!r}")
     path = os.path.join(os.path.expanduser(cfg.notes_dir), f"{stem}.md")
-    return _resolve_within_notes_dir(cfg, path)
+    path = _resolve_within_notes_dir(cfg, path)
+    # ADD must never be an implicit overwrite. In particular, ops supplied to
+    # `distill-apply` may be hand-authored and therefore have bypassed the
+    # advisory duplicate detection in distill.py.
+    if os.path.lexists(path):
+        raise ValueError(f"refusing to overwrite existing note: {path}")
+    return path
 
 
 def _resolve_update_target(cfg: Config, op: Dict) -> Tuple[Dict, str]:
@@ -65,7 +71,9 @@ def _write_add(dest: str, op: Dict) -> str:
         f"---\nname: {op['name']}\ndescription: {op['description']}\n"
         f"priority: normal\n---\n\n{op['body']}\n"
     )
-    with open(dest, "w", encoding="utf-8") as fh:
+    # Exclusive creation closes the check-then-write race with the preflight
+    # check in _dest_in_notes_dir.
+    with open(dest, "x", encoding="utf-8") as fh:
         fh.write(content)
     return dest
 
@@ -107,14 +115,25 @@ def apply_ops(ops: List[Dict], cfg: Config, auto_confirm=None) -> Dict:
 
     Destination resolution (and its ValueError on an unsafe name/target)
     happens before the prompt is shown, on purpose: the human approving
-    needs to see where it actually writes, not the name the op claims."""
-    applied, skipped = [], []
+    needs to see where it actually writes, not the name the op claims.
+
+    One op's destination being unsafe/colliding must never abort the rest
+    of the batch: earlier ops may already have written, and later ops in
+    the same batch are otherwise-independent. So a ValueError here marks
+    just that op as an error and moves on to the next one, rather than
+    propagating out of the loop."""
+    applied, skipped, errors = [], [], []
     for op in ops:
         target_doc: Optional[Dict] = None
-        if op["op"] == "ADD":
-            dest = _dest_in_notes_dir(cfg, op["name"])
-        else:
-            target_doc, dest = _resolve_update_target(cfg, op)
+        try:
+            if op["op"] == "ADD":
+                dest = _dest_in_notes_dir(cfg, op["name"])
+            else:
+                target_doc, dest = _resolve_update_target(cfg, op)
+        except ValueError as exc:
+            print(f"{op['op']} {op['name']!r}\n  -> error: {exc}\n")
+            errors.append({"name": op["name"], "error": str(exc)})
+            continue
 
         print(_describe(op, dest))
         if auto_confirm is not None:
@@ -132,4 +151,4 @@ def apply_ops(ops: List[Dict], cfg: Config, auto_confirm=None) -> Dict:
             path = _write_update(dest, target_doc, op)
         print(f"  -> wrote {path}\n")
         applied.append(op["name"])
-    return {"applied": applied, "skipped": skipped}
+    return {"applied": applied, "skipped": skipped, "errors": errors}

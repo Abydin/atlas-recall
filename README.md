@@ -287,6 +287,25 @@ machine, corpus, or rules. Two fields worth knowing about:
 | `warmer.py` | Optional macOS fix for cloud-synced notes going "dataless". |
 | `cli.py` | The `recall` console script. |
 
+## Upgrading: rebuild the dense index
+
+If you built a dense index with an older version of this package and then
+upgrade, run `recall index --dense` again before relying on semantic
+retrieval. Two changes since the initial release each independently make
+an existing on-disk dense collection stale:
+
+- The dense metadata now carries a path-relative `key` per note (fixes
+  same-filename notes in different subdirectories shadowing each other).
+  An index built before this reads back as a warning on stderr and falls
+  back to name-based matching, which can mis-resolve duplicate filenames.
+- The Chroma directory is now keyed per corpus (`notes_dir`), so two
+  separate note directories no longer share one collection.
+
+Either change leaves a pre-upgrade dense index pointed at the wrong
+collection or missing the new metadata field. `recall query` degrades to
+BM25-only in that case rather than crashing, but you'll get better results
+by just re-running `recall index --dense` after upgrading.
+
 ## Known limitation, carried over honestly
 
 `recall index` (incremental) only re-derives outbound edges for notes it

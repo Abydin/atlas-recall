@@ -57,8 +57,9 @@ PRIORITY_LEVELS = ("hard-rule", "high", "normal")
 def load_corpus(notes_dir: str) -> List[Dict]:
     """Scan `notes_dir` recursively for *.md files; return doc dicts:
     {key, name, description, priority, superseded_by, path, mtime, body,
-    tokens_text}. `key` == `name` (no multi-project namespacing here --
-    single directory in, so there's nothing to namespace against)."""
+    tokens_text}. `key` is the note's path relative to `notes_dir` without
+    the .md suffix, so recursive corpora can safely contain notes with the
+    same filename or display name."""
     notes_dir = os.path.expanduser(notes_dir)
     docs = []
     skipped_dataless = 0
@@ -95,7 +96,7 @@ def load_corpus(notes_dir: str) -> List[Dict]:
             mtime = time.time()
 
         docs.append({
-            "key": name,
+            "key": os.path.splitext(os.path.relpath(fpath, notes_dir))[0].replace(os.sep, "/"),
             "name": name,
             "description": description,
             "priority": priority,
